@@ -2,6 +2,7 @@
 using CefSharp.WinForms;
 using CefSharp.WinForms.Internals;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.IO;
@@ -32,6 +33,10 @@ namespace Karpovych03
         private String historyFile;
         private String bookmarksFile;
 
+        private WebClient webClient = new WebClient();
+
+        private Settings settings;
+
         public Form1()
         {
             InitializeComponent();
@@ -46,7 +51,10 @@ namespace Karpovych03
 
             historyFile = "history.xml";
             bookmarksFile = "bookmarks.xml";
+
+            settings = new Settings("https://www.bing.com/search?q=", true);
         }
+
         private void InitializeHistoryPageComponents()
         {
             historyList = new BindingList<History>();
@@ -60,7 +68,8 @@ namespace Karpovych03
                 ReadOnly = true,
                 RowHeadersVisible = false,
                 AllowUserToAddRows = false,
-                DataSource = historyBindingSource
+                DataSource = historyBindingSource,
+                Dock = DockStyle.Fill
             };
 
             historyDataGrid.CellDoubleClick += OnHistoryCellDoubleClick;
@@ -73,6 +82,8 @@ namespace Karpovych03
             {
                 DataSource = bookmarksList
             };
+
+            bookmarksList.ListChanged += OnListChanged;
 
             bookmarksDataGrid = new DataGridView()
             {
@@ -90,9 +101,45 @@ namespace Karpovych03
             };
         }
 
+        private void OnBookmarksCellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        {
+            DataGridViewCell currentCell = (sender as DataGridView).CurrentCell;
+            AddPage(new TabPage("New tab"));
+            browser.Load(bookmarksList[currentCell.RowIndex].URL);
+        }
+
+        private void OnListChanged(object sender, ListChangedEventArgs e)
+        {
+            FillBookmarksStrip();
+        }
+
+        private void FillBookmarksStrip()
+        {
+            if (bookmarksList.Count != 0)
+            {
+                bookmarksStrip.Items.Clear();
+                foreach (var bookmark in bookmarksList)
+                {
+                    bookmarksStrip.Items.Add(new ToolStripLinkButton(bookmark.Title, GetFavIcon(bookmark.URL), OnBookmarkClick, bookmark.URL));
+                }
+                bookmarksStrip.Visible = true;
+            }
+            else
+            {
+                bookmarksStrip.Visible = false;
+            }
+        }
+
+        private void OnBookmarkClick(object sender, EventArgs e)
+        {
+            AddPage(new TabPage("New tab"));
+            ToolStripLinkButton currentButton = (ToolStripLinkButton)sender;
+            browser.Load(currentButton.URL);
+        }
+
         private void Form1_Load(object sender, EventArgs e)
         {
-            browser = CreateNewBrowser("");
+            browser = CreateNewBrowser("google.com");
 
             if (File.Exists(historyFile))
             {
@@ -111,6 +158,8 @@ namespace Karpovych03
                 }
                 bookmarksBindingSource.DataSource = bookmarksList;
             }
+
+            FillBookmarksStrip();
         }
 
         private void Form1_FormClosed(object sender, FormClosedEventArgs e)
@@ -151,7 +200,7 @@ namespace Karpovych03
                 Dock = DockStyle.Fill
             };
 
-            browser.LoadingStateChanged += OnLoadingStateChanged;
+            //browser.LoadingStateChanged += OnLoadingStateChanged;
             browser.TitleChanged += OnTitleChanged;
             browser.AddressChanged += OnAddressChanged;
 
@@ -163,6 +212,10 @@ namespace Karpovych03
             if (Uri.IsWellFormedUriString(url, UriKind.RelativeOrAbsolute))
             {
                 browser.Load(url);
+            }
+            else
+            {
+                browser.Load(settings.SearchEngine + url);
             }
         }
 
@@ -189,7 +242,7 @@ namespace Karpovych03
             tabControl.SelectedIndex = tabControl.TabPages.Count - 2;
 
             control.Parent = tab;
-            control.Dock = DockStyle.Fill;
+            //control.Dock = DockStyle.Fill;
             control.RightToLeft = RightToLeft.No;
         }
 
@@ -203,8 +256,8 @@ namespace Karpovych03
             TabPage current = (sender as TabControl).SelectedTab;
             if (current != null)
             {
-                Text = "Bowser | " + current.Text;
-                if ((current.Text != "History") && (current.Text != "Bookmarks"))
+                Text = current.Text;
+                if ((current.Text != "History") && (current.Text != "Bookmarks") && (current.Text != "Settings"))
                 {
                     if (current.Controls.Count == 0)
                     {
@@ -225,7 +278,7 @@ namespace Karpovych03
 
         private void OnTitleChanged(object sender, TitleChangedEventArgs args)
         {
-            this.InvokeOnUiThreadIfRequired(() => Text = "Bowser | " + args.Title);
+            this.InvokeOnUiThreadIfRequired(() => Text = args.Title);
             this.InvokeOnUiThreadIfRequired(() => tabControl.SelectedTab.Text = args.Title);
 
             String url = urlTextBox.Text;
@@ -243,10 +296,10 @@ namespace Karpovych03
 
         private void OnLoadingStateChanged(object sender, LoadingStateChangedEventArgs args)
         {
-            SetCanGoBack(args.CanGoBack);
-            SetCanGoForward(args.CanGoForward);
+            //SetCanGoBack(args.CanGoBack);
+            //SetCanGoForward(args.CanGoForward);
 
-            this.InvokeOnUiThreadIfRequired(() => SetIsLoading(!args.CanReload));
+            //this.InvokeOnUiThreadIfRequired(() => SetIsLoading(!args.CanReload));
 
             //if (browser.Address.ToString() != "")
             //{
@@ -254,34 +307,54 @@ namespace Karpovych03
             //}
         }
 
-        private void SetCanGoBack(bool canGoBack)
-        {
-            this.InvokeOnUiThreadIfRequired(() => backButton.Enabled = canGoBack);
-        }
+        //private void SetCanGoBack(bool canGoBack)
+        //{
+        //    this.InvokeOnUiThreadIfRequired(() => backButton.Enabled = canGoBack);
+        //}
 
-        private void SetCanGoForward(bool canGoForward)
-        {
-            this.InvokeOnUiThreadIfRequired(() => goButton.Enabled = canGoForward);
-        }
+        //private void SetCanGoForward(bool canGoForward)
+        //{
+        //    this.InvokeOnUiThreadIfRequired(() => goButton.Enabled = canGoForward);
+        //}
 
-        private void SetIsLoading(bool isLoading)
-        {
-            goButton.Text = isLoading ? "Stop" : "Go";
-            goButton.Image = isLoading ?
-                Properties.Resources.nav_plain_red :
-                Properties.Resources.nav_plain_green;
+        //private void SetIsLoading(bool isLoading)
+        //{
+        //    goButton.Text = isLoading ? "Stop" : "Go";
+        //    goButton.Image = isLoading ?
+        //        Properties.Resources.nav_plain_red :
+        //        Properties.Resources.nav_plain_green;
 
-            HandleToolStripLayout();
-        }
-        private void ChangeTabIcon()
+        //    HandleToolStripLayout();
+        //}
+
+        private Image GetIcon(string address)
         {
-            WebClient webClient = new WebClient();
-            MemoryStream memorystream = new MemoryStream(webClient.DownloadData("https://" + browser.Address + "/favicon.ico"));
+            var url = new Uri(address);
+            MemoryStream memorystream = new MemoryStream(webClient.DownloadData("http://" + url.Host + "/favicon.ico"));
             Icon icon = new Icon(memorystream);
-            string i = Convert.ToString(myimg.Images.Count);
-            myimg.Images.Add(i, icon.ToBitmap());
-            tabControl.ImageList = myimg;
-            tabControl.SelectedTab.ImageIndex = myimg.Images.Count - 1;
+            return (Image)icon.ToBitmap();
+        }
+
+        public static Image GetFavIcon(string url)
+        {
+            Image urlFavIco = null;
+            try
+            {
+                Uri thisUrl = new Uri(url);
+                if (thisUrl.HostNameType == UriHostNameType.Dns)
+                {
+                    string iconUrl = "http://" + thisUrl.Host + "/favicon.ico";
+                    WebRequest req = WebRequest.Create(iconUrl);
+                    WebResponse resp = req.GetResponse();
+                    urlFavIco = Image.FromStream(resp.GetResponseStream());
+                    resp.Close();
+
+                }
+            }
+            catch (Exception ex)
+            { }
+
+            return urlFavIco;
         }
 
         private void HandleToolStripLayout(object sender, LayoutEventArgs e)
@@ -292,17 +365,16 @@ namespace Karpovych03
         private void HandleToolStripLayout()
         {
             //TODO: refactor top toolstrip resizing
-            var width = toolStrip.Width;
-            foreach (ToolStripItem item in toolStrip.Items)
-            {
-                if (item != urlTextBox)
-                {
-                    width -= item.Width - item.Margin.Horizontal;
-                }
-            }
-            urlTextBox.Width = Math.Max(0, width - urlTextBox.Margin.Horizontal - 18);
+            //var width = toolStrip.Width;
+            //foreach (ToolStripItem item in toolStrip.Items)
+            //{
+            //    if (item != urlTextBox)
+            //    {
+            //        width -= item.Width - item.Margin.Horizontal;
+            //    }
+            //}
+            //urlTextBox.Width = Math.Max(0, width - urlTextBox.Margin.Horizontal - 18);
         }
-
 
         private void GoButton_Click(object sender, EventArgs e)
         {
@@ -331,6 +403,7 @@ namespace Karpovych03
             {
                 tabControl.SelectedIndex = tabControl.SelectedIndex - 1;
                 tabControl.TabPages.Remove(current);
+                urlTextBox.Clear();
             }
         }
 
@@ -380,21 +453,91 @@ namespace Karpovych03
             {
                 bookmarksList.Add(new Bookmark(browser.Address, Text));
                 MessageBox.Show("Added", "Bookmarks", MessageBoxButtons.OK);
+                FillBookmarksStrip();
             }
             else
             {
                 MessageBox.Show("This page is already added", "Bookmarks", MessageBoxButtons.OK);
             }
-
-            //TODO: create bookmarks strip
-            //toolStrip.Items.Add(new ToolStripButtonLink("Google","", "", "www.google.com"));
         }
 
-        private void OnBookmarksCellDoubleClick(object sender, DataGridViewCellEventArgs e)
+        private void ReloadButton_Click(object sender, EventArgs e)
         {
-            DataGridViewCell currentCell = (sender as DataGridView).CurrentCell;
-            AddPage(new TabPage("New tab"));
-            browser.Load(bookmarksList[currentCell.RowIndex].URL);
+            browser.Reload();
+        }
+
+        private void SettingsButton_Click(object sender, EventArgs e)
+        {
+            TabPage settingsTab = new TabPage("Settings");
+            TableLayoutPanel tableLayoutPanel = new TableLayoutPanel()
+            {
+                RowCount = 4,
+                ColumnCount = 2,
+                Width = 300,
+                AutoSize = true,
+                MaximumSize = new Size(500, 500),
+                //CellBorderStyle = TableLayoutPanelCellBorderStyle.Single,
+            };
+
+            AddPage(settingsTab, tableLayoutPanel);
+
+            tableLayoutPanel.Controls.Add(new Label { Text = "Search Engine", TextAlign = ContentAlignment.MiddleRight }, 0, 0);
+
+            var searchEngineComboBox = new ComboBox
+            {
+                Dock = DockStyle.Fill,
+                DisplayMember = "Value",
+                ValueMember = "Key"
+            };
+
+            Dictionary<string, string> searchEngineSource = new Dictionary<string, string>
+            {
+                { "https://www.google.com/search?q=", "Google" },
+                { "https://www.bing.com/search?q=", "Bing" }
+            };
+
+            searchEngineComboBox.DataSource = new BindingSource(searchEngineSource, null);
+            searchEngineComboBox.DataBindings.Add("SelectedValue", settings, "SearchEngine", false, DataSourceUpdateMode.OnPropertyChanged);
+
+            tableLayoutPanel.Controls.Add(searchEngineComboBox, 1, 0);
+
+            tableLayoutPanel.Controls.Add(new Label { Text = "Show Bookmarks", TextAlign = ContentAlignment.MiddleRight }, 0, 1);
+
+            var showBookmarks = new ComboBox
+            {
+                Dock = DockStyle.Fill,
+                DisplayMember = "Value",
+                ValueMember = "Key"
+            };
+
+            Dictionary<bool, string> showBookmarksSource = new Dictionary<bool, string>
+            {
+                { true, "Show" },
+                { false, "Hide" }
+            };
+
+            showBookmarks.DataSource = new BindingSource(showBookmarksSource, null);
+            showBookmarks.DataBindings.Add("SelectedValue", settings, "ShowBookmarksBar");
+
+            tableLayoutPanel.Controls.Add(showBookmarks, 1, 1);
+
+            var settingsApplyButton = new Button
+            {
+                Dock = DockStyle.Fill,
+                Text = "Apply"
+            };
+            settingsApplyButton.Click += OnSettingsApplyButtonClick;
+
+            tableLayoutPanel.Controls.Add(settingsApplyButton, 1, 2);
+        }
+
+        private void SetSettings() 
+        {
+            bookmarksStrip.Visible = settings.ShowBookmarksBar;
+        }
+        private void OnSettingsApplyButtonClick(object sender, EventArgs e)
+        {
+            SetSettings();
         }
     }
 }
